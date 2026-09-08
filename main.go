@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,6 +14,11 @@ import (
 )
 
 type closeFunc func() error
+
+type multiError interface {
+	error
+	Unwrap() []error
+}
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -30,7 +36,7 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 	logFile := os.Getenv("LINKO_LOG_FILE")
 	logger, closeLogger, err := initializeLogger(logFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v/n")
+		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v/n", err)
 		return 1
 	}
 	defer func() {
@@ -40,7 +46,9 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 	}()
 	st, err := store.New(dataDir, logger)
 	if err != nil {
-		logger.Error("failed to create store: %v", err)
+		logger.Error("failed to create store",
+			slog.Any("error", err),
+		)
 		return 1
 	}
 	s := newServer(*st, httpPort, cancel, logger)
@@ -54,11 +62,15 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 	defer cancel()
 
 	if err := s.shutdown(shutdownCtx); err != nil {
-		logger.Error("failed to shutdown server: %v", err)
+		logger.Error("failed to shutdown server",
+			slog.Any("error", err),
+		)
 		return 1
 	}
 	if serverErr != nil {
-		logger.Error("server error: %v", serverErr)
+		logger.Error("server error", 
+			slog.Any("error", err),
+		)
 		return 1
 	}
 	return 0

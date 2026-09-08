@@ -34,5 +34,11 @@ func Test_requestLogger(t *testing.T) {
 
 	// replace the .Skip() call with two checks to verify the log string and status code here
 	// If either doesn't match, use t.Errorf to report the failure with a helpful message.
-	t.Skip()
+	
+	 if !(expectedLogString == logBuffer.String()) {
+		t.Errorf("Log string does not match expected result:\n  Expected: %s\n  Received: %s\n", expectedLogString,logBuffer.String())
+	}
+	if !(expectedStatusCode == rr.Code) {
+		t.Errorf("Status code does not match expected result:\n  Expected: %d\n  Received: %d\n", expectedStatusCode, rr.Code)
+	}
 }
