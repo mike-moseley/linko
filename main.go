@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"boot.dev/linko/internal/build"
 	"boot.dev/linko/internal/store"
 )
 
@@ -34,7 +35,7 @@ func main() {
 
 func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir string) int {
 	logFile := os.Getenv("LINKO_LOG_FILE")
-	logger, closeLogger, err := initializeLogger(logFile)
+	logger, closeLogger, err := InitializeLogger(logFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v/n", err)
 		return 1
@@ -44,6 +45,16 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 			fmt.Fprintf(os.Stderr, "failed to close logger: %v\n", err)
 		}
 	}()
+
+	env := os.Getenv("ENV")
+	hostname, _ := os.Hostname()
+
+	logger = logger.With(
+		slog.String("git_sha", build.GitSHA),
+		slog.String("build_time", build.BuildTime),
+		slog.String("env", env),
+		slog.String("hostname", hostname),
+	)
 	st, err := store.New(dataDir, logger)
 	if err != nil {
 		logger.Error("failed to create store",
@@ -68,7 +79,7 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 		return 1
 	}
 	if serverErr != nil {
-		logger.Error("server error", 
+		logger.Error("server error",
 			slog.Any("error", err),
 		)
 		return 1
