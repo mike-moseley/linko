@@ -14,6 +14,8 @@ import (
 
 	"boot.dev/linko/internal/linkoerr"
 
+	"github.com/lmittmann/tint"
+	"github.com/mattn/go-isatty"
 	pkgerr "github.com/pkg/errors"
 )
 
@@ -90,18 +92,24 @@ func replaceAttr(groups []string, a slog.Attr) slog.Attr {
 }
 
 func InitializeLogger(logFile string) (*slog.Logger, closeFunc, error) {
+	tintNC := !isatty.IsTerminal(os.Stderr.Fd()) && !isatty.IsCygwinTerminal(os.Stderr.Fd())
 	if logFile == "" {
-		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+		logger := slog.New(tint.NewTextHandler(os.Stderr, &tint.Options{NoColor: tintNC}))
 		return logger, func() error { return nil }, nil
 	}
 	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open access log: %v", err)
 	}
-	debugHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+	debugHandler := tint.NewTextHandler(os.Stderr, &tint.Options{
 		Level:       slog.LevelDebug,
 		ReplaceAttr: replaceAttr,
+		NoColor:     tintNC,
 	})
+	// debugHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+	// 	Level:       slog.LevelDebug,
+	// 	ReplaceAttr: replaceAttr,
+	// })
 	buf := bufio.NewWriterSize(f, 8192)
 	infoHandler := slog.NewJSONHandler(buf, &slog.HandlerOptions{
 		Level:       slog.LevelInfo,
