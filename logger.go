@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -56,7 +57,7 @@ const logContextKey contextKey = "log_context"
 
 type LogContext struct {
 	Username string
-	Error error
+	Error    error
 }
 
 func errAttrs(err error) []slog.Attr {
@@ -120,10 +121,24 @@ func InitializeLogger(logFile string) (*slog.Logger, closeFunc, error) {
 	return logger, closeFn, nil
 }
 
+func requestID() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			head := r.Header.Get("X-Request-ID")
+			if head == "" {
+				head = rand.Text()
+			}
+			w.Header().Set("X-Request-ID", head)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
+			reqID := w.Header().Get("X-Request-ID")
 			spyReader := &spyReadCloser{ReadCloser: r.Body}
 			spyWriter := &spyResponseWriter{ResponseWriter: w}
 			r.Body = spyReader
@@ -134,6 +149,7 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			attrs := []any{slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.String("client_ip", r.RemoteAddr),
+				slog.String("request_id", reqID),
 				slog.Int("request_body_bytes", spyReader.bytesRead),
 				slog.Int("response_status", spyWriter.statusCode),
 				slog.Int("response_body_bytes", spyWriter.bytesWritten),
